@@ -33,7 +33,22 @@
   var SILENCE_TAIL = RATE * 2;
   var HANDSHAKE_MS = 5000;
   var FINAL_WAIT_MS = 3000;
-  var MIN_WORD_CONF = 0.5;
+  // Grammar-bound Vosk scores a clearly spoken short word low (measured "a" = 0.53), and [unk]
+  // now absorbs off-list speech, so the bar sits near the server's own 0.3 partial floor.
+  var MIN_WORD_CONF = 0.35;
+  // The server puts every homophone of a reference word into the grammar, and Vosk then splits
+  // the score across words that sound identical: "its"/"it's" always comes back at exactly 0.5.
+  // Undo that split by the group size (same groups as the server's HOMOPHONE_GROUPS).
+  var HOMOPHONES = [['to', 'too', 'two'], ['there', 'their', "they're"], ['your', "you're"], ['its', "it's"],
+    ['here', 'hear'], ['know', 'no'], ['write', 'right'], ['would', 'wood'], ['wear', 'where'], ['one', 'won'],
+    ['by', 'buy', 'bye'], ['for', 'four'], ['our', 'hour'], ['sea', 'see'], ['be', 'bee'], ['new', 'knew'],
+    ['night', 'knight'], ['piece', 'peace'], ['sale', 'sail'], ['sun', 'son'], ['wait', 'weight'],
+    ['weak', 'week'], ['weather', 'whether'], ['which', 'witch'], ['whole', 'hole'], ['flower', 'flour'],
+    ['break', 'brake'], ['bare', 'bear'], ['fair', 'fare'], ['pair', 'pear', 'pare'], ['plain', 'plane'],
+    ['principal', 'principle'], ['stair', 'stare'], ['steel', 'steal'], ['tail', 'tale'], ['threw', 'through'],
+    ['waist', 'waste'], ['ok', 'okay']];
+  var HOMOPHONE_SIZE = {};
+  HOMOPHONES.forEach(function (g) { g.forEach(function (w) { HOMOPHONE_SIZE[w] = g.length; }); });
   var RETRY_BELOW_CONF = 0.8;
   var UNK = '[unk]';
   var SETTLE_AFTER_FINAL_MS = 400;
@@ -123,7 +138,8 @@
       if (h.word === UNK) { unknown = true; return; }
       // The server lists "its" as a homophone of "it's" and often returns the bare form.
       var w = h.word === 'its' ? "it's" : h.word;
-      tokens(w).forEach(function (t) { toks.push({ word: t, conf: h.conf }); });
+      var conf = Math.min(1, h.conf * (HOMOPHONE_SIZE[h.word] || 1));
+      tokens(w).forEach(function (t) { toks.push({ word: t, conf: conf }); });
     });
     var transcript = heard.filter(function (h) { return h.word !== UNK; }).map(function (h) { return h.word; }).join(' ');
     var lowest = toks.length ? Math.min.apply(null, toks.map(function (t) { return t.conf; })) : null;
