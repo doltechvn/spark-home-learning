@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eef8ef">
+  <title>SPARK — Learn with Sparky</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app" class="app" data-view="home">
+    <div class="world" aria-hidden="true">
+      <span class="sun"></span>
+      <span class="cloud cloud-one"></span>
+      <span class="cloud cloud-two"></span>
+      <span class="leaf leaf-one"></span>
+      <span class="leaf leaf-two"></span>
+    </div>
+
+    <header class="top-rail">
+      <button id="backButton" class="icon-button back-button is-hidden" type="button" aria-label="Back to mission">←</button>
+      <div class="unit-lockup">
+        <span class="spark-dot" aria-hidden="true">✦</span>
+        <div>
+          <small>UNIT A</small>
+          <strong>Hello School!</strong>
+        </div>
+      </div>
+      <div class="mission-progress" aria-label="Mission progress">
+        <div id="progressDots" class="progress-dots"></div>
+        <span id="progressText">0 of 3</span>
+      </div>
+      <button id="saveProgressButton" class="level-pill" type="button">Save progress</button>
+      <button id="levelButton" class="level-pill" type="button" aria-haspopup="dialog">ⓘ</button>
+    </header>
+
+    <div id="appStatus" class="app-status" role="status" aria-live="polite"></div>
+    <section id="welcomeView" class="view welcome-view is-hidden" aria-labelledby="welcomeTitle">
+      <div class="welcome-hero">
+        <img src="assets/sparky_wave.png" alt="Sparky smiles and waves hello" class="welcome-sparky">
+        <div><p class="eyebrow">SPARK · HOME LEARNING</p><h1 id="welcomeTitle">Hello, explorer!</h1><p>A little practice. A big hello.</p><button id="learnerButton" class="soft-button" type="button">My learning profile</button></div>
+      </div>
+      <div class="unit-section-heading"><h2>Let's learn together</h2><span id="classBadge">My practice</span></div>
+      <div class="carousel-shell"><button id="previousUnit" class="carousel-arrow" aria-label="Previous unit">‹</button><div id="unitCarousel" class="unit-carousel" aria-label="Choose a unit"></div><button id="nextUnit" class="carousel-arrow" aria-label="Next unit">›</button></div>
+      <p class="carousel-help">Swipe to explore · Your latest unlocked unit starts in the middle</p>
+      <p id="unitNotice" class="subtle-note" role="status"></p>
+      <div class="welcome-actions"><button id="joinClassButton" class="soft-button">Join a class</button><button id="teacherButton" class="soft-button">Teacher space ↗</button></div>
+      <p class="demo-caption">LOCAL DEMO · Progress stays in this browser</p>
+    </section>
+
+    <section id="homeView" class="view home-view" aria-labelledby="homeTitle">
+      <div class="mission-heading">
+        <p class="eyebrow">UNIT A · HELLO SCHOOL!</p>
+        <h1 id="homeTitle">What shall we<br>explore today?</h1>
+        <p>Listen, look and speak. You can choose any activity first.</p>
+      </div>
+
+      <div class="zone-grid" aria-label="Unit A learning zones">
+        <button class="zone-card zone-sound" type="button" data-open-view="sound">
+          <span class="zone-number">1</span>
+          <span class="zone-icon letter-icon" aria-hidden="true">N<span>n</span></span>
+          <span class="zone-copy"><strong>Letters &amp; sounds</strong><small>Meet · listen · discover</small></span>
+          <span class="zone-go">Start <span aria-hidden="true">→</span></span>
+        </button>
+
+        <button class="zone-card zone-word" type="button" data-open-view="wordReview">
+          <span class="zone-number">2</span>
+          <span class="mini-objects" aria-hidden="true">
+            <img src="assets/book.png" alt="">
+            <img src="assets/pencil.png" alt="">
+            <img src="assets/bag.png" alt="">
+          </span>
+          <span class="zone-copy"><strong>Vocabulary</strong><small>Listen + find + say</small></span>
+          <span class="zone-go">Start <span aria-hidden="true">→</span></span>
+        </button>
+
+        <button class="zone-card zone-talk" type="button" data-open-view="talk">
+          <span class="zone-number">3</span>
+          <img class="zone-sparky" src="assets/sparky_wave.png" alt="">
+          <span class="zone-copy"><strong>Talk with Sparky</strong><small>Listen + speak + build</small></span>
+          <span class="zone-go">Start <span aria-hidden="true">→</span></span>
+        </button>
+      </div>
+
+      <div class="home-note"><span aria-hidden="true">☀</span> Short practice. Gentle feedback. No scores.</div>
+    </section>
+
+    <section id="soundView" class="view lesson-view is-hidden" aria-label="Letters and sounds">
+      <div id="lettersWorkspace"></div>
+      <div class="lesson-heading">
+        <p class="eyebrow">STEP 1 OF 3</p>
+        <h2 id="soundTitle">Sound Lab</h2>
+        <p>Listen. Is it the letter name or the letter sound?</p>
+      </div>
+      <div class="task-surface sound-surface">
+        <div class="sound-hero" aria-label="Uppercase N and lowercase n"><span class="letter-tile">N</span><span class="letter-tile letter-tile-lower">n</span></div>
+        <div class="nest-cue" aria-label="A bird nest with three eggs" role="img">
+          <svg viewBox="0 0 160 118" aria-hidden="true">
+            <ellipse cx="58" cy="42" rx="19" ry="28" fill="#eaf7ff" stroke="#8fc8e8" stroke-width="4" transform="rotate(-10 58 42)"/>
+            <ellipse cx="82" cy="37" rx="19" ry="29" fill="#fff8dc" stroke="#e6c96c" stroke-width="4"/>
+            <ellipse cx="106" cy="43" rx="19" ry="28" fill="#eff7e8" stroke="#94c57a" stroke-width="4" transform="rotate(10 106 43)"/>
+            <path d="M19 58 Q80 102 141 58 Q132 108 80 109 Q28 108 19 58Z" fill="#b66d35" stroke="#7f4725" stroke-width="5" stroke-linejoin="round"/>
+            <path d="M25 65 Q79 91 136 64 M30 76 Q80 101 130 75 M39 88 Q81 105 121 87" fill="none" stroke="#e2a25b" stroke-width="6" stroke-linecap="round"/>
+            <path d="M16 70 L50 55 M15 87 L53 72 M144 68 L111 55 M145 86 L108 73" fill="none" stroke="#7f4725" stroke-width="5" stroke-linecap="round"/>
+          </svg>
+          <b>nest</b>
+        </div>
+        <audio id="soundAudio" src="assets/phoneme_n.m4a" preload="auto"></audio>
+        <button id="soundPromptButton" class="round-action listen-action" type="button"><span aria-hidden="true">🔊</span><strong>Listen</strong></button>
+        <p id="soundPrompt" class="task-prompt">Tap Listen, then choose.</p>
+        <div class="answer-row">
+          <button class="answer-button" type="button" data-sound-answer="name"><span aria-hidden="true">👁</span><strong>Letter name</strong></button>
+          <button class="answer-button" type="button" data-sound-answer="sound"><span aria-hidden="true">👂</span><strong>Letter sound</strong></button>
+        </div>
+        <div id="soundFeedback" class="feedback" role="status">We can try together.</div>
+      </div>
+    </section>
+
+    <section id="wordReviewView" class="view word-review-view is-hidden" aria-labelledby="wordReviewTitle">
+      <div class="word-review-heading">
+        <p class="eyebrow">STEP 2 OF 3 · LOOK &amp; LISTEN</p>
+        <h2 id="wordReviewTitle">Explore our school words</h2>
+        <p id="wordReviewInstruction">Choose a picture to look inside.</p>
+      </div>
+      <div id="wordGroupChoices" class="word-group-choices" aria-label="Two word groups"></div>
+      <button id="wordResumeButton" class="soft-button word-resume is-hidden" type="button">Continue where I left off →</button>
+      <div id="wordGroupDetail" class="word-group-detail is-hidden">
+        <div class="word-group-detail-top">
+          <button id="wordGroupsBackButton" class="soft-button" type="button">← Both pictures</button>
+          <div>
+            <h3 id="wordGroupTitle">In my bag</h3>
+          </div>
+        </div>
+        <div class="word-group-detail-body">
+          <div id="wordGroupScene" class="word-group-scene"></div>
+          <div id="wordReviewGrid" class="word-review-grid" aria-label="Words in this picture"></div>
+        </div>
+        <div class="word-review-action">
+          <button id="startWordPracticeButton" class="primary-button" type="button">Let's practice! <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="wordView" class="view lesson-view is-hidden" aria-labelledby="wordTitle">
+      <div class="lesson-heading">
+        <p class="eyebrow">STEP 2 OF 3</p>
+        <h2 id="wordTitle">Vocabulary</h2>
+        <p>Listen and find the picture.</p>
+      </div>
+      <div class="task-surface word-surface">
+        <div class="practice-topline"><button id="wordPracticeBackButton" class="soft-button" type="button">← Both pictures</button><span id="wordSaveStatus" role="status"></span></div>
+        <p id="wordRoundStatus" class="round-status">SET 1 OF 4 · WORD 1 OF 3</p>
+        <button id="wordPromptButton" class="round-action word-listen" type="button"><span aria-hidden="true">🔊</span><strong>Listen</strong></button>
+        <p id="wordPrompt" class="task-prompt">Listen, then tap the picture. Tap Listen to hear it again.</p>
+        <div id="pictureOptions" class="picture-options" aria-label="Picture choices"></div>
+        <div id="wordReveal" class="word-reveal is-hidden">
+          <div class="word-reveal-picture"><img id="wordRevealImage" src="assets/book.png" alt="A bound book"><span class="word-success-tick" aria-hidden="true">✓</span></div>
+          <strong id="wordRevealText">book</strong>
+          <div class="word-record-controls">
+            <button id="wordRecordButton" class="record-button" type="button"><span aria-hidden="true">●</span><strong>Record my word</strong></button>
+            <button id="wordPlayRecordingButton" class="soft-button is-hidden" type="button">Play my voice</button>
+            <span id="wordRecordStatus" role="status"></span>
+          </div>
+        </div>
+        <div id="wordFeedback" class="feedback" role="status">Listen and find.</div>
+        <button id="nextWordButton" class="soft-button word-next is-hidden" type="button">Next word <span aria-hidden="true">→</span></button>
+        <button id="backToPicturesButton" class="soft-button word-next is-hidden" type="button">← See both pictures</button>
+      </div>
+    </section>
+
+    <section id="talkView" class="view lesson-view is-hidden" aria-labelledby="talkTitle">
+      <div class="lesson-heading">
+        <p class="eyebrow">STEP 3 OF 3</p>
+        <h2 id="talkTitle">Talk with Sparky</h2>
+        <p>Look and listen. Then speak and build the answer.</p>
+      </div>
+      <div class="task-surface talk-surface">
+        <div id="talkIntroStage" class="talk-stage">
+          <div id="talkVideoChoices" class="talk-video-choices">
+            <button class="talk-video-card" data-talk-frame="what"><video src="assets/talk_what.mp4#t=0.1" muted playsinline preload="metadata" tabindex="-1"></video><strong>What is it?</strong><span>It's a … <b>→</b></span></button>
+            <button class="talk-video-card" data-talk-frame="not"><video src="assets/talk_not.mp4#t=0.1" muted playsinline preload="metadata" tabindex="-1"></video><strong>Help Sparky!</strong><span>It's not a … <b>→</b></span></button>
+          </div>
+          <div id="talkVideoDetail" class="is-hidden">
+          <button id="backToVideos" class="soft-button">← Both videos</button>
+          <video id="talkLessonVideo" class="talk-lesson-video" controls playsinline preload="metadata"></video>
+          <div class="conversation-bubbles">
+            <button id="questionBubble" class="speech-bubble dragon-bubble" type="button">What is it? <span aria-hidden="true">🔊</span></button>
+            <button id="answerBubble" class="speech-bubble child-bubble" type="button">It's a book. <span aria-hidden="true">🔊</span></button>
+          </div>
+          <button id="playConversationButton" class="soft-button" type="button">🔊 Hear the conversation</button>
+          <button id="startTalkQuestionButton" class="primary-button" type="button">Let's answer! →</button>
+          </div>
+        </div>
+        <div id="talkQuestionStage" class="talk-stage is-hidden">
+          <button id="talkQuestionBackButton" class="soft-button talk-stage-back" type="button">← Conversation</button>
+          <p id="talkRoundStatus" class="eyebrow">WORD 1 OF 6 · LISTEN &amp; SPEAK</p>
+          <h3 id="talkQuestionTitle">What is it?</h3>
+          <img id="talkItemImage" class="talk-item-image" src="assets/book.png" alt="A bound book">
+          <button id="replayTalkQuestionButton" class="soft-button" type="button">🔊 Hear the question again</button>
+          <div id="talkQuestionRecordPanel" class="record-panel is-hidden">
+            <button id="recordButton" class="record-button" type="button"><span aria-hidden="true">●</span><strong>Record my turn</strong></button>
+            <button id="playRecordingButton" class="soft-button is-hidden" type="button">Play my voice</button>
+          </div>
+          <div class="talk-help"><button id="talkHintButton" class="hint-button" type="button" aria-label="Show a speaking hint" aria-expanded="false">💡</button><span id="talkHintText" class="is-hidden">It's a book.</span></div>
+          <p id="recordStatus" class="talk-record-status" role="status"></p>
+          <button id="startTalkBuilderButton" class="primary-button is-hidden" type="button">Build the answer →</button>
+        </div>
+        <div id="talkBuilderStage" class="talk-stage is-hidden">
+          <button id="talkBuilderBackButton" class="soft-button talk-stage-back" type="button">← Speaking practice</button>
+          <p id="talkBuilderRoundStatus" class="eyebrow">WORD 1 OF 6 · BUILD THE ANSWER</p>
+          <div class="sentence-builder">
+            <p id="talkBuilderPrompt">What is it?</p>
+            <div id="sentenceLine" class="sentence-line" aria-live="polite"><span>Tap the words in order</span></div>
+            <div id="chunkBank" class="chunk-bank">
+              <button type="button" data-chunk="book.">book.</button>
+              <button type="button" data-chunk="It's">It's</button>
+              <button type="button" data-chunk="a">a</button>
+            </div>
+          </div>
+          <div id="talkFeedback" class="feedback" role="status">Put the words in order.</div>
+          <button id="talkNextButton" class="primary-button is-hidden" type="button">Next picture →</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="completeView" class="view complete-view is-hidden" aria-labelledby="completeTitle">
+      <div class="complete-card">
+        <span class="complete-spark" aria-hidden="true">✦</span>
+        <p class="eyebrow">UNIT A · HOME PRACTICE</p>
+        <h2 id="completeTitle">Mission complete!</h2>
+        <p>You listened, looked, built and spoke.</p>
+        <div class="complete-badges"><span>N /n/</span><span>book</span><span>It's a book.</span></div>
+        <button id="restartButton" class="primary-button" type="button">Practise again</button>
+      </div>
+    </section>
+
+    <footer class="bottom-rail">
+      <button type="button" data-nav="home" class="nav-button is-active"><span aria-hidden="true">⌂</span><small>Home</small></button>
+      <button id="replayButton" type="button" class="nav-button"><span aria-hidden="true">↻</span><small>Replay</small></button>
+      <button id="parentButton" type="button" class="nav-button"><span aria-hidden="true">◉</span><small>Teacher</small></button>
+    </footer>
+
+    <dialog id="infoDialog" class="info-dialog">
+      <form method="dialog">
+        <button class="dialog-close" type="submit" aria-label="Close">×</button>
+        <p class="eyebrow">PROTOTYPE NOTE</p>
+        <h2>About this demo</h2>
+        <p>Progress, classes and recordings stay in this browser. Class codes demonstrate joining here; they do not sync other devices. Recordings can be reviewed by a teacher on this device. AI speaking scores are not enabled.</p>
+        <p>Letter names need Chrome with Google UK English Male. Sounds use DOL recordings. Words and sentences use ElevenLabs. Videos retain their original supplied soundtrack. New voice files await listening review.</p>
+        <button class="primary-button" type="submit">Got it</button>
+      </form>
+    </dialog>
+    <dialog id="teacherDialog" class="teacher-dialog"><button id="closeTeacher" class="dialog-close" aria-label="Close teacher space">×</button><div id="teacherWorkspace"></div></dialog>
+    <dialog id="profileDialog" class="info-dialog"><form id="profileForm"><button type="button" id="closeProfile" class="dialog-close" aria-label="Close">×</button><p class="eyebrow">LOCAL DEMO PROFILE</p><h2>Ready to explore?</h2><label>Your name<input id="learnerName" maxlength="40" required autocomplete="off" placeholder="e.g. Alex"></label><label>Class code <small>(optional)</small><input id="learnerClassCode" maxlength="12" autocomplete="off" placeholder="Ask your teacher"></label><p id="profileError" role="status"></p><p class="subtle-note">Use demo names only. Profiles and classes stay on this device.</p><button class="primary-button" type="submit">Let's go!</button></form></dialog>
+  </main>
+
+  <script defer src="audio_catalog.js"></script>
+  <script defer src="demo.js"></script>
+  <script defer src="app.js"></script>
+</body>
+</html>
