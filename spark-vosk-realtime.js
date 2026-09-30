@@ -135,7 +135,9 @@
    * opts: { target, accept?, distractors?, level? = 'normal', env? = 'prod' ('int' | wss-url),
    *         onPartial?(text, check), onCheck?(check), onLevel?(0..1),
    *         stopOnMatch? = true (stop as soon as the server's live verdict is correct),
-   *         silenceStopMs? = 1200 (null = only manual stop), maxMs? = 15000 }
+   *         silenceStopMs? = 1200 (null = only manual stop), maxMs? = 15000,
+   *         stream? = an already-open mic MediaStream to listen to (e.g. the one your MediaRecorder
+   *                   records). It is only tapped, never stopped: its owner keeps the mic. }
    * Returns { done: Promise<result>, stop(): Promise<result>, cancel() }.
    */
   function start(opts) {
@@ -155,8 +157,12 @@
 
     return openSocket(sockOpts)
       .then(function (sock) {
-        return navigator.mediaDevices
-          .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+        // One mic for everyone: tapping the caller's stream instead of opening a second one keeps
+        // Safari from cutting the other recorder short.
+        var mic = opts.stream
+          ? Promise.resolve(opts.stream)
+          : navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        return mic
           .catch(function (err) { sock.cancel(); ctx.close(); throw err; })
           .then(function (stream) { return { sock: sock, stream: stream }; });
       })
@@ -189,7 +195,7 @@
         function release() {
           proc.onaudioprocess = null;
           try { src.disconnect(); proc.disconnect(); sink.disconnect(); } catch (_) {}
-          r.stream.getTracks().forEach(function (t) { t.stop(); });
+          if (!opts.stream) r.stream.getTracks().forEach(function (t) { t.stop(); });
           if (opts.onLevel) opts.onLevel(0);
           return ctx.close().catch(function () {});
         }

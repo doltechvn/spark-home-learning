@@ -644,6 +644,8 @@ function nextWordRound() {
 }
 
 function clearWordRecording() {
+  state.wordCheck?.stop();
+  state.wordCheck = null;
   if (state.wordMediaRecorder?.state === "recording") state.wordMediaRecorder.stop();
   state.wordMediaStream?.getTracks().forEach((track) => track.stop());
   state.wordMediaStream = null;
@@ -692,8 +694,22 @@ async function toggleWordRecording() {
       state.wordMediaStream = null;
       dom.wordPlayRecordingButton.classList.remove("is-hidden");
       dom.wordRecordStatus.textContent = "Listen to your voice or try again.";
+      // DOL speech check: show whether the word was said, keep the replay button.
+      const check = state.wordCheck;
+      state.wordCheck = null;
+      if (check) {
+        dom.wordRecordStatus.textContent = "Checking…";
+        const round = state.wordRoundIndex;
+        check.stop().then((result) => {
+          if (state.wordRoundIndex !== round || state.wordMediaRecorder !== recorder) return;
+          dom.wordRecordStatus.textContent = SparkSpeech.message(result) || "Listen to your voice or try again.";
+        });
+      }
     });
     recorder.start();
+    state.wordCheck = window.SparkSpeech?.listen(stream, recordedWord, () => {
+      if (state.wordMediaRecorder === recorder && recorder.state === "recording") toggleWordRecording();
+    }) || null;
     window.setTimeout(()=>{if(state.wordMediaRecorder===recorder&&recorder.state==='recording')toggleWordRecording();},15000);
     dom.wordRecordButton.classList.add("is-recording");
     dom.wordRecordButton.querySelector("strong").textContent = "Stop recording";
@@ -968,9 +984,23 @@ async function toggleRecording(automatic = false) {
       state.mediaStream = null;
       dom.playRecordingButton.classList.toggle("is-hidden", !state.audioUrl);
       dom.startTalkBuilderButton.classList.remove("is-hidden");
-      dom.recordStatus.textContent = "Voice saved on this device. Listen, try again, or continue. AI scoring is not enabled.";
+      dom.recordStatus.textContent = "Voice saved on this device. Listen, try again, or continue.";
+      // DOL speech check on the spoken answer.
+      const check = state.talkCheck;
+      state.talkCheck = null;
+      if (check) {
+        dom.recordStatus.textContent = "Checking…";
+        check.stop().then((result) => {
+          if (state.mediaRecorder !== recorder || epoch !== state.talkQuestionEpoch) return;
+          const verdict = SparkSpeech.message(result);
+          dom.recordStatus.textContent = verdict ? verdict + " Listen, try again, or continue." : "Voice saved on this device. Listen, try again, or continue.";
+        });
+      }
     });
     recorder.start();
+    state.talkCheck = window.SparkSpeech?.listen(stream, recordedAnswer, () => {
+      if (state.mediaRecorder === recorder && recorder.state === "recording") toggleRecording();
+    }) || null;
     window.setTimeout(()=>{if(state.mediaRecorder===recorder&&recorder.state==='recording')toggleRecording();},15000);
     watchTalkSpeech(stream, epoch);
     dom.recordButton.classList.add("is-recording");
@@ -987,6 +1017,8 @@ async function toggleRecording(automatic = false) {
 }
 
 function releaseTalkMicrophone() {
+  state.talkCheck?.stop();
+  state.talkCheck = null;
   state.talkQuestionEpoch += 1;
   state.talkRecordingPendingEpoch = null;
   window.clearTimeout(state.talkHintTimer);
