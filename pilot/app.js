@@ -252,7 +252,7 @@ function restoreWordProgress() {
 function saveTalkProgress() {
   try {
     localStorage.setItem(v2.key(TALK_SAVE_KEY), JSON.stringify({
-      stage: state.talkStage,
+      stage: ['result','checking'].includes(state.talkStage) ? 'question' : state.talkStage,
       index: state.talkIndex,
       chunks: state.chunks,
       confirmed: state.talkConfirmed,
@@ -799,6 +799,7 @@ function resetTalk() {
   state.talkConfirmed = false;
   state.talkBuildLocked = false;
   state.talkStage = "intro";
+  document.querySelector('#talkResultStage')?.classList.add('is-hidden');
   dom.talkIntroStage.classList.remove("is-hidden");
   dom.talkQuestionStage.classList.add("is-hidden");
   dom.talkBuilderStage.classList.add("is-hidden");
@@ -813,6 +814,7 @@ function showTalkStage(stage, playAudio = false) {
   window.speechSynthesis?.cancel();
   if (stage !== "question") releaseTalkMicrophone();
   state.talkStage = stage;
+  document.querySelector('#talkResultStage')?.classList.add('is-hidden');
   dom.talkIntroStage.classList.toggle("is-hidden", stage !== "intro");
   dom.talkQuestionStage.classList.toggle("is-hidden", stage !== "question");
   dom.talkBuilderStage.classList.toggle("is-hidden", stage !== "builder");
@@ -980,7 +982,6 @@ async function toggleRecording(automatic = false) {
     state.mediaStream = stream;
     const chunks = [];
     const recordedAnswer = talkAnswer();
-    const guidedTake=(state.talkSpeechAttempts?.[`${v2.data.active}:${v2.selectedFrame}:${state.talkIndex}`]||0)>=2;
     const recordingLearner = v2.data.active;
     const recorder = new MediaRecorder(stream);
     state.mediaRecorder = recorder;
@@ -1000,26 +1001,13 @@ async function toggleRecording(automatic = false) {
       dom.startTalkBuilderButton.classList.add("is-hidden");
       const token = state.talkAssessmentToken = (state.talkAssessmentToken || 0) + 1;
       dom.recordStatus.textContent = "Checking your sentence…";
+      showTalkAssessmentPending();
       window.SparkSpeech.check(new Blob(chunks, {type:recorder.mimeType}), recordedAnswer, 'sentence').then(async result => {
-        const current=()=>state.talkAssessmentToken===token && state.mediaRecorder===recorder && epoch===state.talkQuestionEpoch && state.currentView==='talk' && state.talkStage==='question' && v2.data.active===recordingLearner;
+        const current=()=>state.talkAssessmentToken===token && state.mediaRecorder===recorder && epoch===state.talkQuestionEpoch && state.currentView==='talk' && state.talkStage==='checking' && v2.data.active===recordingLearner;
         if(!current())return;
         dom.recordStatus.textContent=result.message;
-        dom.startTalkBuilderButton.classList.toggle('is-hidden',result.verdict==='wrong'&&!guidedTake);
         v2.work('Talk speech', recordedAnswer, result.transcript, result.verdict==='retry'?null:result.verdict==='correct', {stars:result.stars,verdict:result.verdict,assessment:'vosk-sentence'});
-        const key=`${recordingLearner}:${v2.selectedFrame}:${state.talkIndex}`;
-        state.talkSpeechAttempts ||= {};
-        if(result.verdict==='wrong'){
-          const attempts=state.talkSpeechAttempts[key]=(state.talkSpeechAttempts[key]||0)+1;
-          if(attempts>=2){
-            dom.talkHintText.textContent=recordedAnswer;showTalkHint();
-            dom.recordStatus.textContent='Listen, then record the whole sentence again.';
-            dom.recordButton.disabled=true;
-            try{await speak(recordedAnswer);}finally{dom.recordButton.disabled=false;}
-            if(current())dom.recordStatus.textContent='Your turn — tap Record and try with the model.';
-          }else{
-            dom.talkHintText.textContent=v2.talkFrame();showTalkHint();
-          }
-        }
+        showTalkAssessmentResult(result);
       });
     });
     recorder.start();
