@@ -24,6 +24,8 @@ window.sparkPilot = pilot;
 const note = (message, error=false) => { $('#cloudStatus').textContent=message; $('#cloudStatus').classList.toggle('is-error',error); };
 const isTeacher = () => teacherIdentity(pilot.user);
 const isAdmin = () => isTeacher() && pilot.user.email.toLowerCase()===ADMIN_EMAIL;
+// A Google teacher identity must never become a learner session.
+const canUseLearnerSession = () => !!auth.currentUser?.isAnonymous;
 const progressRef = () => doc(db,'classes',pilot.session.classId,'learners',pilot.session.learnerId,'progress','unit-a');
 const safeJSON = value => { try { return JSON.parse(value); } catch { return null; } };
 const cacheKey = () => `spark-pilot-pending:${pilot.session.classId}:${pilot.session.learnerId}`;
@@ -64,6 +66,7 @@ function applyPayload(payload){
   renderProgress();v2.renderWelcome();v2.ready=true;
 }
 function queueSave(){
+  if(!canUseLearnerSession())return;
   if(!pilot.session||pilot.loading||pilot.blocked||!v2.ready)return;
   pilot.dirty=true;pilot.generation++;
   try{localStorage.setItem(cacheKey(),JSON.stringify({revision:pilot.revision,payload:capture()}));}catch{note('Bộ nhớ thiết bị đầy. Giữ trang mở để lưu lên máy chủ.',true);}
@@ -71,6 +74,7 @@ function queueSave(){
   clearTimeout(pilot.timer);pilot.timer=setTimeout(()=>saveCloud(),1800);
 }
 async function saveCloud(){
+  if(!canUseLearnerSession())return;
   if(!pilot.dirty||pilot.saving||!pilot.session||pilot.blocked||pilot.loading)return;
   if(!navigator.onLine){note('Mất mạng · tiến độ đang giữ trên thiết bị',true);return;}
   pilot.saving=true; const generation=pilot.generation, session=pilot.session, ref=progressRef();
@@ -87,8 +91,11 @@ async function saveCloud(){
   finally{pilot.saving=false;if(pilot.dirty&&!pilot.blocked) {clearTimeout(pilot.timer);pilot.timer=setTimeout(()=>saveCloud(),8000);}}
 }
 async function loadLearner(session){
+  if(!canUseLearnerSession())return;
+  const uid=auth.currentUser.uid;
   pilot.loading=true;pilot.session=session;
   const [profile,cls,progress]=await Promise.all([getDoc(doc(db,'classes',session.classId,'learners',session.learnerId)),getDoc(doc(db,'classes',session.classId)),getDoc(progressRef())]);
+  if(auth.currentUser?.uid!==uid||!canUseLearnerSession()||pilot.session!==session)return;
   if(!profile.exists()||!cls.exists())throw new Error('MISSING_PROFILE');
   pilot.profile=profile.data();pilot.classroom=cls.data();pilot.revision=progress.data()?.revision||0;
   let payload=safeJSON(progress.data()?.payload);const pending=safeJSON(localStorage.getItem(cacheKey()));
@@ -98,21 +105,27 @@ async function loadLearner(session){
   applyPayload(payload);pilot.loading=false;
   if(!pilot.blocked)note(pilot.dirty?'Đã khôi phục phần chưa đồng bộ. Bấm Save progress.':'✓ Đã tải tiến độ từ máy chủ');
   pilot.unwatch?.();pilot.unwatch=onSnapshot(doc(db,'classes',session.classId),snap=>{
+    if(auth.currentUser?.uid!==uid||!canUseLearnerSession()||pilot.session!==session)return;
     if(!snap.exists())return;pilot.classroom=snap.data();v2.data.classes[0]={id:session.classId,...pilot.classroom};v2.renderWelcome();
     if(!pilot.classroom.unlocked){showView('welcome');note('GV chưa mở Unit A cho lớp.');}
   },()=>{pilot.blocked=true;showView('welcome');note('Quyền truy cập đã thay đổi. Hãy vào lại bằng mã của GV.',true);});
   showView('welcome');
 }
 async function confirmCode(event){
+  if(auth.currentUser&&!canUseLearnerSession()){event?.preventDefault();openProfile();return;}
   event?.preventDefault();const code=cleanCode($('#pilotCode').value);
   if(!/^[A-F0-9]{32}$/.test(code)){$('#pilotProfileStatus').textContent='Dán mã cá nhân đầy đủ do GV gửi nhé.';return;}
   const button=$('#checkLearnerCode');button.disabled=true;
   try{
     if(pilot.dirty){await saveCloud();if(pilot.dirty)throw new Error('UNSAVED');}
     if(!auth.currentUser)await signInAnonymously(auth);
+    const learnerUid=auth.currentUser?.uid;
+    if(!canUseLearnerSession())return;
     const invitation=await getDoc(doc(db,'invitations',code));if(!invitation.exists())throw new Error('INVALID_CODE');
+    if(auth.currentUser?.uid!==learnerUid||!canUseLearnerSession())return;
     const data=invitation.data(),session={classId:data.classId,learnerId:data.learnerId,invite:code};
-    await setDoc(doc(db,'sessions',auth.currentUser.uid),session);
+    await setDoc(doc(db,'sessions',learnerUid),session);
+    if(auth.currentUser?.uid!==learnerUid||!canUseLearnerSession())return;
     await loadLearner(session);
     $('#pilotNameConfirm').innerHTML=`<h3>Con là ${escape(pilot.profile.name)}?</h3><p>${escape(pilot.classroom.name)}</p><button class="primary-button" id="confirmMyName">Đúng rồi, vào học!</button>`;
     $('#confirmMyName').onclick=()=>{$('#profileDialog').close();history.replaceState(null,'',location.pathname+location.search);showView('welcome');};
@@ -123,6 +136,12 @@ async function confirmCode(event){
 function openProfile(code=''){
   v2.cancel();releaseTalkMicrophone();clearWordRecording();
   const dialog=$('#profileDialog');
+  if(auth.currentUser&&!canUseLearnerSession()){
+    dialog.innerHTML='<button class="dialog-close" id="pilotCloseProfile" aria-label="Close">×</button><h2>Bạn đang ở chế độ giáo viên</h2><p>Để thử bài, dùng Xem thử Unit A trong cổng GV. Chế độ này không lưu vào bài làm học viên.</p><p>Để kiểm tra link riêng của bé, mở bằng cửa sổ ẩn danh hoặc trình duyệt khác, không đăng nhập GV.</p><button id="returnTeacher" class="primary-button">Về cổng GV</button>';
+    const exit=document.createElement('button');exit.className='soft-button';exit.textContent='Đăng xuất';exit.onclick=logout;dialog.append(exit);
+    $('#pilotCloseProfile').onclick=()=>dialog.close();$('#returnTeacher').onclick=()=>{dialog.close();openTeacher();};
+    if(!dialog.open)dialog.showModal();return;
+  }
   dialog.innerHTML=`<button type="button" class="dialog-close" id="pilotCloseProfile" aria-label="Close">×</button><p class="eyebrow">MY LEARNING PROFILE</p><h2>Vào lớp cùng Sparky</h2><form id="pilotJoinForm"><label>Mã cá nhân<input id="pilotCode" autocomplete="off" spellcheck="false" maxlength="64" placeholder="Dán mã GV gửi" value="${escape(code)}"></label><button id="checkLearnerCode" class="primary-button">Tìm tên của con</button></form><div id="pilotNameConfirm"></div><p id="pilotProfileStatus" role="status"></p><p class="subtle-note">Link/mã riêng chỉ dành cho con. Không chia sẻ lên nhóm công khai.</p>${pilot.user?'<button id="pilotProfileSignout" class="soft-button">Đăng xuất / đổi học viên</button>':''}`;
   $('#pilotJoinForm').onsubmit=confirmCode;$('#pilotCloseProfile').onclick=()=>dialog.close();$('#pilotProfileSignout')?.addEventListener('click',logout);
   if(!dialog.open)dialog.showModal();
@@ -131,6 +150,15 @@ async function logout(){
   await saveCloud();if(pilot.dirty){note('Chưa đồng bộ xong. Hãy kết nối mạng và Save progress trước khi đăng xuất.',true);return;}
   pilot.unwatch?.();pilot.unwatch=null;pilot.session=null;pilot.profile=null;pilot.classroom=null;clearTimeout(pilot.timer);
   await signOut(auth);for(const dialog of document.querySelectorAll('dialog[open]'))dialog.close();emptyRuntime();note('Đã đăng xuất.');
+}
+function teacherRuntime(cls,preview=false){
+  pilot.unwatch?.();pilot.unwatch=null;pilot.session=null;pilot.profile=null;pilot.classroom=null;
+  pilot.dirty=false;pilot.blocked=false;pilot.loading=false;clearTimeout(pilot.timer);
+  emptyRuntime();
+  const id='teacher-preview';
+  v2.data={classes:[{id,name:preview?'GV xem thử · không lưu bài':cls?`GV · ${cls.name}`:'GV · Chưa chọn lớp',unlocked:preview||!!cls?.unlocked}],learners:[{id,name:'giáo viên',classId:id,work:[],snapshot:{}}],active:id};
+  v2.unitIndex=0;v2.renderWelcome();
+  note(preview?'GV xem thử · không ghi vào tiến độ học viên':'Chế độ GV · trạng thái Unit theo lớp đang chọn · không lưu bài học viên');
 }
 function resolveConflict(){
   if(!pilot.session){location.reload();return;}
@@ -149,13 +177,16 @@ async function openTeacher(){
     root.innerHTML='<p class="eyebrow">TEACHER PORTAL</p><h2>Lớp học của bạn</h2><p>Đăng nhập bằng tài khoản Google @dolenglish.vn.</p><button id="pilotGoogle" class="primary-button">Đăng nhập với Google</button><p id="teacherStatus" role="status"></p>';
     $('#pilotGoogle').onclick=async()=>{if(pilot.dirty){await saveCloud();$('#teacherStatus').textContent=pilot.dirty?'Hãy lưu tiến độ học viên trước khi đổi tài khoản.':'Đã lưu. Bấm Đăng nhập với Google để tiếp tục.';return;}
       const provider=new GoogleAuthProvider();provider.setCustomParameters({hd:'dolenglish.vn',prompt:'select_account'});
-      try{const pending=emulated?qaTeacherSignIn():signInWithPopup(auth,provider);$('#pilotGoogle').disabled=true;await pending;if(!teacherIdentity(auth.currentUser)){$('#teacherStatus').textContent='Chỉ tài khoản Google đã xác minh @dolenglish.vn được vào cổng GV.';$('#pilotGoogle').disabled=false;return;}await openTeacher();}
-      catch(error){$('#teacherStatus').textContent=errText(error)+(error.code?' ('+error.code+')':'');$('#pilotGoogle').disabled=false;}};
+      const loginButton=$('#pilotGoogle');loginButton.disabled=true;
+      try{await (emulated?qaTeacherSignIn():signInWithPopup(auth,provider));if(!teacherIdentity(auth.currentUser)){if($('#teacherStatus'))$('#teacherStatus').textContent='Chỉ tài khoản Google đã xác minh @dolenglish.vn được vào cổng GV.';loginButton.disabled=false;return;}await openTeacher();}
+      catch(error){if($('#teacherStatus'))$('#teacherStatus').textContent=errText(error)+(error.code?' ('+error.code+')':'');loginButton.disabled=false;}};
     return;
   }
   root.innerHTML='<p>Đang tải lớp…</p>';
+  const teacherUid=pilot.user.uid;
   try{
     const ref=collection(db,'classes');const result=await getDocs(isAdmin()?ref:query(ref,where('ownerUid','==',pilot.user.uid)));
+    if(auth.currentUser?.uid!==teacherUid||!isTeacher())return;
     pilot.classes=result.docs.map(item=>({id:item.id,...item.data()}));
     if(!pilot.classes.some(c=>c.id===pilot.selectedClass))pilot.selectedClass=pilot.classes[0]?.id||null;
     await renderTeacher();
@@ -163,11 +194,12 @@ async function openTeacher(){
 }
 async function renderTeacher(){
   const cls=pilot.classes.find(c=>c.id===pilot.selectedClass),root=$('#teacherWorkspace');
+  teacherRuntime(cls);
   root.innerHTML=`<p class="eyebrow">${isAdmin()?'ADMIN · QUẢN LÝ':'TEACHER PORTAL'}</p><h2>${isAdmin()?'Tổng quan các lớp':'Lớp học của bạn'}</h2><div class="teacher-toolbar"><span>${escape(pilot.user.email)}</span><button id="pilotSignout" class="soft-button">Đăng xuất</button></div>
     <div class="teacher-toolbar"><label>Lớp<select id="pilotClassSelect"><option value="">Chọn lớp</option>${pilot.classes.map(c=>`<option value="${c.id}" ${c.id===cls?.id?'selected':''}>${escape(c.name)}</option>`).join('')}</select></label>${!isAdmin()?'<button id="pilotNewClass" class="soft-button">＋ Tạo lớp</button>':''}<button id="pilotRefresh" class="soft-button">↻ Cập nhật</button><button id="pilotPreviewUnit" class="soft-button">Xem thử Unit A</button></div>
     <form id="pilotClassForm" class="is-hidden"><label>Tên lớp<input id="pilotClassName" required maxlength="60"></label><button class="primary-button">Tạo lớp</button></form><p id="teacherStatus" role="status"></p><div id="pilotClassContent"></div>`;
   $('#pilotSignout').onclick=logout;$('#pilotRefresh').onclick=openTeacher;
-  $('#pilotPreviewUnit').onclick=async()=>{await saveCloud();if(pilot.dirty){$('#teacherStatus').textContent='Lưu tiến độ học viên trước khi xem thử.';return;}pilot.unwatch?.();pilot.unwatch=null;pilot.session=null;emptyRuntime();v2.data.classes[0].unlocked=true;v2.data.classes[0].name='GV xem thử · không lưu vào lớp';$('#teacherDialog').close();showView('home');note('GV xem thử Unit A · không ghi vào tiến độ học viên');};
+  $('#pilotPreviewUnit').onclick=()=>{teacherRuntime(cls,true);$('#teacherDialog').close();showView('home');};
   $('#pilotClassSelect').onchange=event=>{pilot.selectedClass=event.target.value;renderTeacher();};
   $('#pilotNewClass')?.addEventListener('click',()=>$('#pilotClassForm').classList.toggle('is-hidden'));
   $('#pilotClassForm').onsubmit=async event=>{event.preventDefault();const name=$('#pilotClassName').value.trim();if(!name)return;
@@ -176,7 +208,7 @@ async function renderTeacher(){
     catch(error){$('#teacherStatus').textContent=errText(error);submit.disabled=false;}};
   if(!cls){$('#pilotClassContent').textContent=isAdmin()?'Chưa có lớp. GV đăng nhập để tự tạo lớp và danh sách.':'Tạo lớp đầu tiên để thêm học viên.';return;}
   $('#pilotClassContent').innerHTML=`<p class="subtle-note">GV phụ trách: ${escape(cls.ownerEmail)}</p><details class="teacher-units"><summary>Unit A · ${cls.unlocked?'Đang mở':'Đang khóa'}</summary><label class="unlock-row"><input id="pilotUnlock" type="checkbox" ${cls.unlocked?'checked':''}> Mở Unit A — Hello School!</label></details><div class="teacher-toolbar"><h3>Học viên</h3><button id="pilotBulkButton" class="soft-button">＋ Dán danh sách</button><button id="pilotExport" class="soft-button">Tải mã / link</button></div><div id="pilotBulk" class="is-hidden"><label>Mỗi dòng một tên<textarea id="pilotNames" rows="6" placeholder="Nguyễn Minh An&#10;Trần Gia Bảo"></textarea></label><button id="pilotPreview" class="soft-button">Xem trước danh sách</button><div id="pilotRosterPreview"></div></div><div id="pilotLearners">Đang tải…</div><div id="pilotWork"></div><p class="subtle-note">Pilot có Vosk cho từ/câu: GV xem nội dung nhận diện và sao luyện tập; không nghe được file ghi âm từ thiết bị khác. Chưa chấm từng âm. Chỉ thử với GV trước khi xác nhận chính sách lưu audio.</p>`;
-  $('#pilotUnlock').onchange=async event=>{const unlocked=event.target.checked;event.target.disabled=true;try{await updateDoc(doc(db,'classes',cls.id),{unlocked,latest:serverTimestamp()});cls.unlocked=unlocked;$('.teacher-units summary').textContent='Unit A · '+(unlocked?'Đang mở':'Đang khóa');$('#teacherStatus').textContent='Đã lưu quyền truy cập Unit A.';}catch(error){event.target.checked=!unlocked;$('#teacherStatus').textContent=errText(error);}finally{event.target.disabled=false;}};
+  $('#pilotUnlock').onchange=async event=>{const unlocked=event.target.checked;event.target.disabled=true;try{await updateDoc(doc(db,'classes',cls.id),{unlocked,latest:serverTimestamp()});cls.unlocked=unlocked;teacherRuntime(cls);$('.teacher-units summary').textContent='Unit A · '+(unlocked?'Đang mở':'Đang khóa');$('#teacherStatus').textContent='Đã lưu quyền truy cập Unit A.';}catch(error){event.target.checked=!unlocked;$('#teacherStatus').textContent=errText(error);}finally{event.target.disabled=false;}};
   $('#pilotBulkButton').onclick=()=>$('#pilotBulk').classList.toggle('is-hidden');
   $('#pilotPreview').onclick=()=>previewRoster(cls);
   $('#pilotExport').onclick=()=>{const csv=rosterCSV(pilot.roster,baseURL);const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='SPARK-learner-links.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('#teacherStatus').textContent='Mỗi link là mã truy cập riêng. Chỉ gửi từng dòng cho đúng phụ huynh.';};
@@ -225,7 +257,12 @@ onAuthStateChanged(auth,async user=>{
   if(pilot.user?.uid!==user?.uid){pilot.unwatch?.();pilot.unwatch=null;pilot.session=null;pilot.profile=null;pilot.classroom=null;pilot.dirty=false;pilot.blocked=false;emptyRuntime();}
   pilot.user=user;pilot.loading=true;
   try{
-    if(user){const session=await getDoc(doc(db,'sessions',user.uid));if(session.exists())await loadLearner(session.data());else {pilot.loading=false;note(isTeacher()?'Đã đăng nhập GV. Mở Teacher space để quản lý lớp.':'Nhập mã cá nhân do GV gửi.');}}
+    if(isTeacher()){
+      // Ignore legacy learner mappings under teacher UIDs. Do not delete learner data.
+      teacherRuntime(null);history.replaceState(null,'',location.pathname+location.search);await openTeacher();return;
+    }
+    if(user?.isAnonymous){const session=await getDoc(doc(db,'sessions',user.uid));if(auth.currentUser?.uid!==user.uid)return;if(session.exists())await loadLearner(session.data());else {pilot.loading=false;note('Nhập mã cá nhân do GV gửi.');}}
+    else if(user){pilot.loading=false;note('Tài khoản này không thuộc cổng GV. Đăng xuất để vào bằng mã học viên.',true);}
     else{pilot.loading=false;note('Vào bằng link/mã cá nhân, hoặc đăng nhập cổng GV.');}
   }catch(error){pilot.loading=false;note(errText(error),true);}
   const code=new URLSearchParams(location.hash.slice(1)).get('learner');if(code&&!offeredLink){offeredLink=true;openProfile(code);}
