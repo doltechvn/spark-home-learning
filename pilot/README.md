@@ -1,4 +1,4 @@
-# SPARK Home Learning — Units A and B teacher pilot
+# SPARK Home Learning — Units A, B and C teacher pilot
 
 Letters & sounds, Vocabulary and Talk with Sparky, with Firebase class progress.
 
@@ -8,7 +8,8 @@ the main branch, root folder. Firebase web configuration is public, not an admin
 Authentication and Firestore security rules must be deployed before learner use.
 
 ## Important demo limits
-- Units A and B have activities. Units C–L are preview cards. Teachers unlock each unit separately; existing Unit A progress and learner codes remain valid.
+- Units A, B and C have activities. Units D–L are preview cards. Teachers unlock each unit separately (class fields `unlocked`, `unlockedB`, `unlockedC`); existing Unit A/B progress and learner codes remain valid.
+- Unit C (Colors & Numbers) reuses approved C1–C5 lesson pictures and recordings; see `unit-c/MEDIA-SOURCES.json`.
 - Teachers use verified Google accounts in @dolenglish.vn; classroom access is
   enforced in Firestore rules. Admin: thanh.tran@dolenglish.vn.
 - Names, progress and work summaries sync to Firebase. Individual private links

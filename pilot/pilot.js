@@ -17,12 +17,20 @@ function qaTeacherSignIn(){
 const $ = selector => document.querySelector(selector);
 const escape = value => v2.esc(value);
 const tally = (value,max) => Number.isInteger(value)?Math.max(0,Math.min(max,value)):0;
-const UNIT = document.documentElement.dataset.unit === 'unit-b' ? 'unit-b' : 'unit-a';
-const UNIT_LABEL = UNIT === 'unit-b' ? 'Unit B' : 'Unit A';
-const FIRST_FRAME = UNIT === 'unit-b' ? 'is' : 'what';
-const baseURL = new URL(UNIT === 'unit-b' ? '../' : './', location.href).href;
-const unitOpen = (cls,unit=UNIT) => unit==='unit-a' ? cls?.unlocked===true : cls?.unlockedB===true;
-function resetTalkContent(){v2.selectedFrame=FIRST_FRAME;TALK_ITEMS=(UNIT==='unit-b'?v2.yesNo.map(p=>p[0]):['book','pen','pencil','notebook','rubber','bag']).map(word=>WORD_ITEMS.find(x=>x.word===word));}
+// One row per unit page: class unlock field, Talk frame keys, folder and word count.
+const UNITS = {
+  'unit-a':{label:'Unit A',title:'Hello School!',index:0,field:'unlocked',first:'what',second:'not',path:'./',words:11},
+  'unit-b':{label:'Unit B',title:'My Toys',index:1,field:'unlockedB',first:'is',second:'not',path:'unit-b/',words:10},
+  'unit-c':{label:'Unit C',title:'Colors & Numbers',index:2,field:'unlockedC',first:'many',second:'colour',path:'unit-c/',words:20},
+};
+const UNIT = UNITS[document.documentElement.dataset.unit] ? document.documentElement.dataset.unit : 'unit-a';
+const UNIT_LABEL = UNITS[UNIT].label;
+const FIRST_FRAME = UNITS[UNIT].first, SECOND_FRAME = UNITS[UNIT].second;
+const baseURL = new URL(UNIT === 'unit-a' ? './' : '../', location.href).href;
+const unitOpen = (cls,unit=UNIT) => cls?.[UNITS[unit].field]===true;
+const unitAt = index => Object.keys(UNITS).find(unit=>UNITS[unit].index===index)||null;
+const startIndex = cls => {const last=cls?.lastOpenedUnit;return last&&last!=='unit-a'&&UNITS[last]&&unitOpen(cls,last)?UNITS[last].index:UNITS[UNIT].index;};
+function resetTalkContent(){v2.selectedFrame=FIRST_FRAME;TALK_ITEMS=v2.talkItems?v2.talkItems():(UNIT==='unit-b'?v2.yesNo.map(p=>p[0]):['book','pen','pencil','notebook','rubber','bag']).map(word=>WORD_ITEMS.find(x=>x.word===word));}
 const pilot = { user:null, session:null, profile:null, classroom:null, revision:0, dirty:false,
   saving:false, blocked:false, loading:true, unwatch:null, timer:null, selectedClass:null, classes:[], roster:[], generation:0 };
 window.sparkPilot = pilot;
@@ -33,7 +41,7 @@ const isAdmin = () => isTeacher() && pilot.user.email.toLowerCase()===ADMIN_EMAI
 const canUseLearnerSession = () => !!auth.currentUser?.isAnonymous;
 const progressRef = () => doc(db,'classes',pilot.session.classId,'learners',pilot.session.learnerId,'progress',UNIT);
 const safeJSON = value => { try { return JSON.parse(value); } catch { return null; } };
-const cacheKey = () => `spark-pilot-pending:${pilot.session.classId}:${pilot.session.learnerId}${UNIT==='unit-b'?':unit-b':''}`;
+const cacheKey = () => `spark-pilot-pending:${pilot.session.classId}:${pilot.session.learnerId}${UNIT==='unit-a'?'':':'+UNIT}`;
 const errText = error => {
   if(error?.message==='CONFLICT') return 'Có tiến độ mới từ thiết bị khác. Tải lại để tiếp tục; bản đang làm vẫn được giữ trên thiết bị này.';
   if(error?.code==='permission-denied') return 'Chưa được cấp quyền hoặc mã đã bị thu hồi. Hãy liên hệ GV.';
@@ -55,7 +63,7 @@ function capture(){
   const read=(base,frame=UNIT)=>safeJSON(localStorage.getItem(`pilot:${learner.id}:${base}:${frame}`));
   return {schema:1,learner:{lettersDone:learner.lettersDone||[],talkDone:learner.talkDone||[],letterSession:learner.letterSession||null,
     snapshot:learner.snapshot||{},work:(learner.work||[]).slice(-200).map(({clipId,...entry})=>entry)},
-    word:read(WORD_SAVE_KEY),talkWhat:read(TALK_SAVE_KEY,FIRST_FRAME),talkNot:read(TALK_SAVE_KEY,'not')};
+    word:read(WORD_SAVE_KEY),talkWhat:read(TALK_SAVE_KEY,FIRST_FRAME),talkNot:read(TALK_SAVE_KEY,SECOND_FRAME)};
 }
 function applyPayload(payload){
   v2.ready=false;
@@ -64,11 +72,11 @@ function applyPayload(payload){
   learner.id=pilot.session.learnerId;learner.name=pilot.profile.name;learner.classId=pilot.session.classId;
   v2.data={classes:[{id:pilot.session.classId,...pilot.classroom}],learners:[learner],active:learner.id};
   const put=(base,frame,value)=>{const key=`pilot:${learner.id}:${base}:${frame}`; if(value)localStorage.setItem(key,JSON.stringify(value));else localStorage.removeItem(key);};
-  put(WORD_SAVE_KEY,UNIT,payload?.word);put(TALK_SAVE_KEY,FIRST_FRAME,payload?.talkWhat);put(TALK_SAVE_KEY,'not',payload?.talkNot);
+  put(WORD_SAVE_KEY,UNIT,payload?.word);put(TALK_SAVE_KEY,FIRST_FRAME,payload?.talkWhat);put(TALK_SAVE_KEY,SECOND_FRAME,payload?.talkNot);
   state.complete.clear();resetTalkContent();
   resetWord();resetTalk();restoreWordProgress();restoreTalkProgress();v2.restoreLetters();
   if(learner.talkDone?.length===2)state.complete.add('talk');
-  v2.unitIndex=pilot.classroom.lastOpenedUnit==='unit-b'&&pilot.classroom.unlockedB?1:UNIT==='unit-b'?1:0;
+  v2.unitIndex=startIndex(pilot.classroom);
   renderProgress();v2.renderWelcome();v2.ready=true;
 }
 function queueSave(){
@@ -162,8 +170,8 @@ function teacherRuntime(cls,preview=false){
   pilot.dirty=false;pilot.blocked=false;pilot.loading=false;clearTimeout(pilot.timer);
   emptyRuntime();
   const id='teacher-preview';
-  v2.data={classes:[{id,name:preview?'GV xem thử · không lưu bài':cls?`GV · ${cls.name}`:'GV · Chưa chọn lớp',unlocked:preview||!!cls?.unlocked,unlockedB:preview||!!cls?.unlockedB,lastOpenedUnit:cls?.lastOpenedUnit}],learners:[{id,name:'giáo viên',classId:id,work:[],snapshot:{}}],active:id};
-  v2.unitIndex=cls?.lastOpenedUnit==='unit-b'&&cls?.unlockedB?1:UNIT==='unit-b'?1:0;v2.renderWelcome();
+  v2.data={classes:[{id,name:preview?'GV xem thử · không lưu bài':cls?`GV · ${cls.name}`:'GV · Chưa chọn lớp',unlocked:preview||!!cls?.unlocked,unlockedB:preview||!!cls?.unlockedB,unlockedC:preview||!!cls?.unlockedC,lastOpenedUnit:cls?.lastOpenedUnit}],learners:[{id,name:'giáo viên',classId:id,work:[],snapshot:{}}],active:id};
+  v2.unitIndex=startIndex(cls);v2.renderWelcome();
   note(preview?'GV xem thử · không ghi vào tiến độ học viên':'Chế độ GV · trạng thái Unit theo lớp đang chọn · không lưu bài học viên');
 }
 function resolveConflict(){
@@ -216,18 +224,18 @@ async function renderTeacher(){
   if(!cls){$('#pilotClassContent').textContent=isAdmin()?'Chưa có lớp. GV đăng nhập để tự tạo lớp và danh sách.':'Tạo lớp đầu tiên để thêm học viên.';return;}
   $('#pilotClassContent').innerHTML=`<p class="subtle-note">GV phụ trách: ${escape(cls.ownerEmail)}</p><details class="teacher-units"><summary>Unit A · ${cls.unlocked?'Đang mở':'Đang khóa'}</summary><label class="unlock-row"><input id="pilotUnlock" type="checkbox" ${cls.unlocked?'checked':''}> Mở Unit A — Hello School!</label></details><div class="teacher-toolbar"><h3>Học viên</h3><button id="pilotBulkButton" class="soft-button">＋ Dán danh sách</button><button id="pilotExport" class="soft-button">Tải mã / link</button></div><div id="pilotBulk" class="is-hidden"><label>Mỗi dòng một tên<textarea id="pilotNames" rows="6" placeholder="Nguyễn Minh An&#10;Trần Gia Bảo"></textarea></label><button id="pilotPreview" class="soft-button">Xem trước danh sách</button><div id="pilotRosterPreview"></div></div><div id="pilotLearners">Đang tải…</div><div id="pilotWork"></div><p class="subtle-note">Pilot có Vosk cho từ/câu: GV xem nội dung nhận diện và sao luyện tập; không nghe được file ghi âm từ thiết bị khác. Chưa chấm từng âm. Chỉ thử với GV trước khi xác nhận chính sách lưu audio.</p>`;
   $('#pilotUnlock').onchange=async event=>{const unlocked=event.target.checked;event.target.disabled=true;try{await updateDoc(doc(db,'classes',cls.id),{unlocked,latest:serverTimestamp()});cls.unlocked=unlocked;teacherRuntime(cls);$('.teacher-units summary').textContent='Unit A · '+(unlocked?'Đang mở':'Đang khóa');$('#teacherStatus').textContent='Đã lưu quyền truy cập Unit A.';}catch(error){event.target.checked=!unlocked;$('#teacherStatus').textContent=errText(error);}finally{event.target.disabled=false;}};
-  const units=$('.teacher-units');units.querySelector('summary').textContent='Mở / khóa Unit A và Unit B';
-  const bLabel=document.createElement('label');bLabel.className='unlock-row';
-  bLabel.innerHTML=`<input id="pilotUnlockB" type="checkbox" ${cls.unlockedB?'checked':''}> Mở Unit B — My Toys`;units.append(bLabel);
-  for(const [selector,field,unit] of [['#pilotUnlock','unlocked','unit-a'],['#pilotUnlockB','unlockedB','unit-b']]){
+  const units=$('.teacher-units');units.querySelector('summary').textContent='Mở / khóa Unit A, B và C';
+  for(const [id,unit] of [['pilotUnlockB','unit-b'],['pilotUnlockC','unit-c']]){const label=document.createElement('label');label.className='unlock-row';
+    label.innerHTML=`<input id="${id}" type="checkbox" ${unitOpen(cls,unit)?'checked':''}> Mở ${UNITS[unit].label} — ${escape(UNITS[unit].title)}`;units.append(label);}
+  for(const [selector,unit] of [['#pilotUnlock','unit-a'],['#pilotUnlockB','unit-b'],['#pilotUnlockC','unit-c']]){const field=UNITS[unit].field;
     $(selector).onchange=async event=>{const checked=event.target.checked;event.target.disabled=true;try{
       const change={[field]:checked,latest:serverTimestamp(),...(checked?{lastOpenedUnit:unit}:{})};
       await updateDoc(doc(db,'classes',cls.id),change);Object.assign(cls,change);teacherRuntime(cls);
-      $('#teacherStatus').textContent='Đã lưu quyền truy cập '+(unit==='unit-a'?'Unit A.':'Unit B.');
+      $('#teacherStatus').textContent='Đã lưu quyền truy cập '+UNITS[unit].label+'.';
     }catch(error){event.target.checked=!checked;$('#teacherStatus').textContent=errText(error);}finally{event.target.disabled=false;}};
   }
-  const switchUnit=document.createElement('button');switchUnit.className='soft-button';switchUnit.textContent='Xem thử '+(UNIT==='unit-a'?'Unit B':'Unit A');
-  switchUnit.onclick=()=>navigateUnit(UNIT==='unit-a'?'unit-b':'unit-a',true);$('#pilotPreviewUnit').after(switchUnit);
+  for(const unit of Object.keys(UNITS).filter(unit=>unit!==UNIT).reverse()){const switchUnit=document.createElement('button');switchUnit.className='soft-button';switchUnit.textContent='Xem thử '+UNITS[unit].label;
+    switchUnit.onclick=()=>navigateUnit(unit,true);$('#pilotPreviewUnit').after(switchUnit);}
   $('#pilotBulkButton').onclick=()=>$('#pilotBulk').classList.toggle('is-hidden');
   $('#pilotPreview').onclick=()=>previewRoster(cls);
   $('#pilotExport').onclick=()=>{const csv=rosterCSV(pilot.roster,baseURL);const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='SPARK-learner-links.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('#teacherStatus').textContent='Mỗi link là mã truy cập riêng. Chỉ gửi từng dòng cho đúng phụ huynh.';};
@@ -259,8 +267,8 @@ async function viewWork(cls,learner,unit=UNIT){
     const work=Array.isArray(data?.learner?.work)?data.learner.work.filter(entry=>entry&&typeof entry==='object'):[];
     root.innerHTML=`<h3>${escape(learner.name)}</h3><p>${tally(p.letters,7)}/7 letters · ${tally(p.words,11)}/11 words · ${tally(p.talkFrames,2)}/2 Talk lessons</p><p class="subtle-note">${snap.exists()?'Đồng bộ lần cuối: '+escape(snap.data().updatedAt?.toDate().toLocaleString('vi-VN')||''):'Chưa có bài làm đồng bộ.'}</p><details><summary>Link riêng & quyền truy cập</summary><input aria-label="Link riêng của học viên" readonly value="${escape(baseURL+'#learner='+learner.invite)}"><button id="copyLearnerLink" class="soft-button">Chép link</button><button id="revokeLearnerCode" class="soft-button">Thu hồi quyền truy cập mã này</button><p id="learnerCodeStatus" role="status"></p></details><div>${work.slice(-30).reverse().map(entry=>`<div class="work-row"><span>${escape(entry.kind)} · ${escape(entry.item)}</span><strong>${[1,2,3].includes(entry.stars)?'★'.repeat(entry.stars)+' · ':''}${entry.correct===true?'✓ Đúng':entry.correct===false?'↻ Thử lại':entry.verdict==='retry'?'Chưa chấm được':'Đã thực hành'}</strong><small>${escape(entry.response)} · ${escape(new Date(entry.at).toLocaleString('vi-VN'))}</small></div>`).join('')}</div>`;
     $('#copyLearnerLink').onclick=async()=>{try{await navigator.clipboard.writeText(baseURL+'#learner='+learner.invite);$('#learnerCodeStatus').textContent='Đã chép link riêng.';}catch{$('#learnerCodeStatus').textContent='Chọn ô link để chép thủ công.';}};
-    const selector=document.createElement('select');selector.setAttribute('aria-label','Unit tiến độ');selector.innerHTML='<option value="unit-a">Unit A — Hello School!</option><option value="unit-b">Unit B — My Toys</option>';selector.value=unit;selector.onchange=()=>viewWork(cls,learner,selector.value);root.prepend(selector);
-    const totals=root.querySelector('p');totals.textContent=`${tally(p.letters,7)}/7 letters · ${tally(p.words,unit==='unit-b'?10:11)}/${unit==='unit-b'?10:11} words · ${tally(p.talkFrames,2)}/2 Talk lessons`;
+    const selector=document.createElement('select');selector.setAttribute('aria-label','Unit tiến độ');selector.innerHTML=Object.keys(UNITS).map(key=>`<option value="${key}">${UNITS[key].label} — ${escape(UNITS[key].title)}</option>`).join('');selector.value=unit;selector.onchange=()=>viewWork(cls,learner,selector.value);root.prepend(selector);
+    const totals=root.querySelector('p');totals.textContent=`${tally(p.letters,7)}/7 letters · ${tally(p.words,UNITS[unit].words)}/${UNITS[unit].words} words · ${tally(p.talkFrames,2)}/2 Talk lessons`;
     $('#revokeLearnerCode').onclick=async()=>{const button=$('#revokeLearnerCode');button.disabled=true;try{await updateDoc(doc(db,'invitations',learner.invite),{active:false});$('#learnerCodeStatus').textContent='Đã thu hồi mã. Dữ liệu cũ vẫn còn; các thiết bị dùng mã này không còn quyền truy cập.';}catch(error){$('#learnerCodeStatus').textContent=errText(error);button.disabled=false;}};
   }catch(error){root.textContent=errText(error);}
 }
@@ -268,13 +276,13 @@ async function viewWork(cls,learner,unit=UNIT){
 async function navigateUnit(unit,preview=false){
   if(pilot.loading||pilot.saving){note('Đợi tải / lưu tiến độ xong rồi thử lại nhé.');return;}
   await saveCloud();if(pilot.dirty){note('Lưu tiến độ xong trước khi đổi Unit.',true);return;}
-  const url=new URL(unit==='unit-b'?'unit-b/':'./',baseURL);if(preview&&isTeacher())url.searchParams.set('preview','1');
+  const url=new URL(UNITS[unit].path,baseURL);if(preview&&isTeacher())url.searchParams.set('preview','1');
   location.assign(url.href);
 }
 v2.renderWelcome=function(){
   const cls=this.classroom(),learner=this.learner();$('#welcomeTitle').textContent=learner&&learner.id!=='pilot-guest'?`Hello, ${learner.name}!`:'Hello, explorer!';$('#classBadge').textContent=cls?.name||'My practice';
   const carousel=$('#unitCarousel');carousel.replaceChildren();
-  for(const offset of [-1,0,1]){const i=(this.unitIndex+offset+12)%12,unit=i===0?'unit-a':i===1?'unit-b':null,open=unit&&unitOpen(cls,unit),letter=String.fromCharCode(65+i);
+  for(const offset of [-1,0,1]){const i=(this.unitIndex+offset+12)%12,unit=unitAt(i),open=unit&&unitOpen(cls,unit),letter=String.fromCharCode(65+i);
     const b=document.createElement('button');b.className=`unit-card ${offset===0?'is-center':''} ${open?'is-unlocked':'is-locked'}`;
     b.innerHTML=`<span class="unit-card-status">${open?'READY TO EXPLORE':unit?'TEACHER LOCKED':'COMING LATER'}</span><strong>UNIT ${letter}</strong><h3>${this.titles[i]}</h3><span>${open?'Let’s go! →':'🔒'}</span>`;
     b.setAttribute('aria-label',`Unit ${letter}: ${this.titles[i]}, ${open?'unlocked':'locked'}`);
