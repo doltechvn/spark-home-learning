@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function teacher() {
+      return signedIn() && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email.matches('^[^@]+@dolenglish[.]vn$');
+    }
+    function admin() {
+      return teacher() && request.auth.token.email == 'thanh.tran@dolenglish.vn';
+    }
+    function owns(classId) {
+      return teacher() && (admin() ||
+        get(/databases/$(database)/documents/classes/$(classId)).data.ownerUid == request.auth.uid);
+    }
+    function learner(classId, learnerId) {
+      let session = get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data;
+      let invitation = get(/databases/$(database)/documents/invitations/$(session.invite)).data;
+      return signedIn() && session.classId == classId && session.learnerId == learnerId
+        && invitation.active == true && invitation.classId == classId && invitation.learnerId == learnerId;
+    }
+    function enrolled(classId) {
+      let session = get(/databases/$(database)/documents/sessions/$(request.auth.uid)).data;
+      return learner(classId, session.learnerId);
+    }
+    match /classes/{classId} {
+      allow list: if teacher() && (admin() || resource.data.ownerUid == request.auth.uid);
+      allow get: if owns(classId) || (signedIn() && enrolled(classId));
+      allow create: if teacher() && request.resource.data.keys().hasOnly(['name','ownerUid','ownerEmail','unlocked','createdAt','latest'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerEmail == request.auth.token.email
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && request.resource.data.unlocked == false && request.resource.data.createdAt == request.time;
+      allow update: if owns(classId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','unlocked','unlockedB','unlockedC','lastOpenedUnit','latest'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && request.resource.data.unlocked is bool
+        && (!('unlockedB' in request.resource.data) || request.resource.data.unlockedB is bool)
+        && (!('unlockedC' in request.resource.data) || request.resource.data.unlockedC is bool)
+        && (!('lastOpenedUnit' in request.resource.data) || request.resource.data.lastOpenedUnit in ['unit-a','unit-b','unit-c']);
+      allow delete: if false;
+      match /learners/{learnerId} {
+        allow list: if owns(classId);
+        allow get: if owns(classId) || (signedIn() && learner(classId, learnerId));
+        allow create: if owns(classId) && request.resource.data.keys().hasOnly(['name','invite','createdAt'])
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+          && request.resource.data.invite.matches('^[A-F0-9]{32}$') && request.resource.data.createdAt == request.time;
+        allow update: if owns(classId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60;
+        allow delete: if false;
+        match /progress/{unitId} {
+          allow read: if owns(classId) || (signedIn() && learner(classId, learnerId));
+          allow create, update: if signedIn() && learner(classId, learnerId)
+            && ((unitId == 'unit-a' && get(/databases/$(database)/documents/classes/$(classId)).data.unlocked == true)
+              || (unitId == 'unit-b' && get(/databases/$(database)/documents/classes/$(classId)).data.get('unlockedB', false) == true)
+              || (unitId == 'unit-c' && get(/databases/$(database)/documents/classes/$(classId)).data.get('unlockedC', false) == true))
+            && request.resource.data.keys().hasOnly(['payload','revision','updatedAt','sessionUid'])
+            && request.resource.data.payload is string && request.resource.data.payload.size() <= 150000
+            && request.resource.data.sessionUid == request.auth.uid && request.resource.data.updatedAt == request.time
+            && request.resource.data.revision is int
+            && ((!exists(/databases/$(database)/documents/classes/$(classId)/learners/$(learnerId)/progress/$(unitId)) && request.resource.data.revision == 1)
+              || request.resource.data.revision == resource.data.revision + 1);
+          allow delete: if false;
+        }
+      }
+    }
+    // Exact lookup only: a 128-bit invitation is a bearer credential, not a roster.
+    match /invitations/{code} {
+      allow get: if signedIn() && code.matches('^[A-F0-9]{32}$') && resource.data.active == true;
+      allow list: if false;
+      allow create: if owns(request.resource.data.classId)
+        && code.matches('^[A-F0-9]{32}$')
+        && request.resource.data.keys().hasOnly(['classId','learnerId','active'])
+        && request.resource.data.active == true
+        && getAfter(/databases/$(database)/documents/classes/$(request.resource.data.classId)/learners/$(request.resource.data.learnerId)).data.invite == code;
+      allow update: if owns(resource.data.classId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active'])
+        && request.resource.data.active is bool;
+      allow delete: if false;
+    }
+    match /sessions/{uid} {
+      allow get: if signedIn() && uid == request.auth.uid;
+      allow list: if false;
+      allow create, update: if signedIn() && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['classId','learnerId','invite'])
+        && request.resource.data.invite.matches('^[A-F0-9]{32}$')
+        && get(/databases/$(database)/documents/invitations/$(request.resource.data.invite)).data.active == true
+        && get(/databases/$(database)/documents/invitations/$(request.resource.data.invite)).data.classId == request.resource.data.classId
+        && get(/databases/$(database)/documents/invitations/$(request.resource.data.invite)).data.learnerId == request.resource.data.learnerId;
+      allow delete: if signedIn() && uid == request.auth.uid;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

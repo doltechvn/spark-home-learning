@@ -7,6 +7,13 @@ Serve this directory with any static HTTPS host. For GitHub Pages, publish
 the main branch, root folder. Firebase web configuration is public, not an admin secret.
 Authentication and Firestore security rules must be deployed before learner use.
 
+### Firestore rules
+`firestore.rules` is a copy of the rules published in Firebase Console
+(project `spark-home-learning` › Firestore › Rules). The Console is the live
+source: edit there, Publish, then update this copy. Adding a unit needs both
+its class unlock field (e.g. `unlockedD`, in the classes `update` rule and the
+`lastOpenedUnit` list) and a `progress/unit-x` clause checking that field.
+
 ## Important demo limits
 - Units A, B and C have activities. Units D–L are preview cards. Teachers unlock each unit separately (class fields `unlocked`, `unlockedB`, `unlockedC`); existing Unit A/B progress and learner codes remain valid.
 - Unit C (Colors & Numbers) reuses approved C1–C5 lesson pictures and recordings; see `unit-c/MEDIA-SOURCES.json`.
